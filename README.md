@@ -1,59 +1,180 @@
-# Overview
-This repository contains a React frontend, and an Express backend that the frontend connects to.
+# Fullstack CI/CD Pipeline — AWS + Jenkins + ECS
 
-# Objective
-Deploy the frontend and backend to somewhere publicly accessible over the internet. The AWS Free Tier should be more than sufficient to run this project, but you may use any platform and tooling you'd like for your solution.
+A fully automated CI/CD pipeline that builds, pushes, and deploys a containerized fullstack application (React frontend + Node.js backend) to AWS ECS Fargate using Jenkins.
 
-Fork this repo as a base. You may change any code in this repository to suit the infrastructure you build in this code challenge.
+---
 
-# Submission
-1. A github repo that has been forked from this repo with all your code.
-2. Modify this README file with instructions for:
-* Any tools needed to deploy your infrastructure
-* All the steps needed to repeat your deployment process
-* URLs to the your deployed frontend.
+## Live URLs
 
-# Evaluation
-You will be evaluated on the ease to replicate your infrastructure. This is a combination of quality of the instructions, as well as any scripts to automate the overall setup process.
+- **Frontend:** http://frontend-alb-1462025716.us-east-2.elb.amazonaws.com
+- **Jenkins:** http://18.117.92.68:8080
 
-# Setup your environment
-Install nodejs. Binaries and installers can be found on nodejs.org.
-https://nodejs.org/en/download/
+---
 
-For macOS or Linux, Nodejs can usually be found in your preferred package manager.
-https://nodejs.org/en/download/package-manager/
+## Project Overview
 
-Depending on the Linux distribution, the Node Package Manager `npm` may need to be installed separately.
+This project demonstrates a complete DevOps workflow:
 
-# Running the project
-The backend and the frontend will need to run on separate processes. The backend should be started first.
+1. Code is pushed to GitHub
+2. Jenkins pulls the repo and builds Docker images for both frontend and backend
+3. Images are pushed to Amazon ECR
+4. ECS services are updated to deploy the new images automatically
+
+---
+
+## AWS Resources
+
+### Jenkins Server
+- **EC2 Instance (t3.small):** Hosts the Jenkins CI/CD server running on Ubuntu 24.04 in the `us-east-2` region
+- **Security Group (jenkins-sg):** Allows inbound traffic on port 8080 (Jenkins UI) and port 22 (SSH access)
+- **IAM Role (jenkins-role):** Attached to the EC2 instance with the following permissions:
+  - `AmazonEC2ContainerRegistryFullAccess` — push/pull Docker images to/from ECR
+  - `AmazonECS_FullAccess` — trigger ECS service updates
+  - `AmazonS3ReadOnlyAccess` — read access to S3
+
+### Networking
+- **VPC** with public and private subnets across two availability zones
+- **Internet Gateway (IGW)** for public internet access
+- **Route Tables** configured for public subnet routing
+
+### Container Infrastructure
+- **ECR Repositories:** `fullstack-frontend` and `fullstack-backend` for storing Docker images
+- **ECS Cluster (fullstack-cluster):** Fargate-based cluster running both services
+- **ECS Task Definitions:** Separate task definitions for frontend (port 3000) and backend (port 8080)
+- **ECS Services:** `frontend-service` and `backend-service` with desired count of 1
+- **Application Load Balancer (ALB):** Routes public HTTP traffic to the frontend ECS service
+
+---
+
+## Repository Structure
+
 ```
-cd backend
-npm ci
-npm start
+techpathway-2/
+├── frontend/               # React frontend app
+│   ├── Dockerfile
+│   └── src/
+├── backend/                # Node.js backend app
+│   ├── Dockerfile
+│   └── index.js
+├── infra/                  # Terraform infrastructure
+│   ├── provider.tf
+│   ├── networking.tf
+│   ├── security.tf
+│   ├── jenkins.tf
+│   ├── ecs.tf
+│   ├── ecr.tf
+│   ├── alb.tf
+│   ├── iam.tf
+│   └── outputs.tf
+└── Jenkinsfile             # CI/CD pipeline definition
 ```
-The backend should response to a GET request on `localhost:8080`.
 
-With the backend started, the frontend can be started.
+---
+
+## CI/CD Pipeline
+
+The `Jenkinsfile` defines a pipeline with the following stages:
+
+| Stage | Description |
+|-------|-------------|
+| Checkout | Pulls latest code from GitHub main branch |
+| Build Docker Images | Builds frontend and backend Docker images |
+| Login to ECR | Authenticates Docker with Amazon ECR |
+| Push Images to ECR | Tags and pushes both images to ECR |
+| Deploy to ECS | Triggers force-new-deployment on both ECS services |
+
+### Running the Pipeline
+
+1. Log into Jenkins at `http://18.117.92.68:8080`
+2. Open the `fullstack-pipeline` job
+3. Click **Build Now**
+4. Monitor progress under **Console Output**
+
+---
+
+## Terraform Infrastructure
+
+All AWS infrastructure is defined as code using Terraform.
+
+### Prerequisites
+- Terraform installed
+- AWS CLI configured with appropriate credentials
+- AWS region: `us-east-2`
+
+### Deploy Infrastructure
+
+```bash
+cd infra/
+terraform init
+terraform plan
+terraform apply
 ```
-cd frontend
-npm ci
-npm start
+
+### Destroy Infrastructure
+
+```bash
+terraform destroy
 ```
-The frontend can be accessed at `localhost:3000`. If the frontend successfully connects to the backend, a message saying "SUCCESS" followed by a guid should be displayed on the screen.  If the connection failed, an error message will be displayed on the screen.
 
-# Configuration
-The frontend has a configuration file at `frontend/src/config.js` that defines the URL to call the backend. This URL is used on `frontend/src/App.js#12`, where the front end will make the GET call during the initial load of the page.
+---
 
-The backend has a configuration file at `backend/config.js` that defines the host that the frontend will be calling from. This URL is used in the `Access-Control-Allow-Origin` CORS header, read in `backend/index.js#14`
+## Docker Setup
 
-# Optional Extras
-The core requirement for this challenge is to get the provided application up and running for consumption over the public internet. That being said, there are some opportunities in this code challenge to demonstrate your skill sets that are above and beyond the core requirement.
+### Frontend Dockerfile
+Multi-stage build — compiles React app, serves with `serve` on port 3000.
 
-A few examples of extras for this coding challenge:
-1. Dockerizing the application
-2. Scripts to set up the infrastructure
-3. Providing a pipeline for the application deployment
-4. Running the application in a serverless environment
+### Backend Dockerfile
+Node.js app running on port 8080.
 
-This is not an exhaustive list of extra features that could be added to this code challenge. At the end of the day, this section is for you to demonstrate any skills you want to show that’s not captured in the core requirement.
+### Build Locally
+
+```bash
+# Frontend
+docker build -t fullstack-frontend ./frontend
+
+# Backend
+docker build -t fullstack-backend ./backend
+```
+
+---
+
+## Environment Variables
+
+The Jenkins pipeline uses the following environment variables defined in the `Jenkinsfile`:
+
+| Variable | Value |
+|----------|-------|
+| AWS_REGION | us-east-2 |
+| AWS_ACCOUNT_ID | 208744928440 |
+| FRONTEND_REPO | fullstack-frontend |
+| BACKEND_REPO | fullstack-backend |
+| ECS_CLUSTER | fullstack-cluster |
+| FRONTEND_SERVICE | frontend-service |
+| BACKEND_SERVICE | backend-service |
+
+---
+
+## Setup Instructions
+
+### 1. Clone the repo
+```bash
+git clone https://github.com/JadenSal/techpathway-2.git
+cd techpathway-2
+```
+
+### 2. Deploy infrastructure
+```bash
+cd infra/
+terraform init
+terraform apply
+```
+
+### 3. Configure Jenkins
+- Navigate to `http://<JENKINS_IP>:8080`
+- Install plugins: Docker Pipeline, Amazon ECR, AWS Credentials
+- Create a new Pipeline job pointing to this GitHub repo
+- Set branch to `main` and script path to `Jenkinsfile`
+
+### 4. Run the pipeline
+- Click **Build Now** in Jenkins
+- Pipeline will build, push, and deploy both services automatically
