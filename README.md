@@ -178,3 +178,20 @@ terraform apply
 ### 4. Run the pipeline
 - Click **Build Now** in Jenkins
 - Pipeline will build, push, and deploy both services automatically
+## How to Run the App Locally (for Testing)
+
+### Backend
+```bash
+cd backend
+npm ci
+npm start
+```
+Runs on: `http://localhost:8080`
+
+### Frontend
+```bash
+cd frontend
+npm ci
+npm start
+```
+Runs on: `http://localhost:3000`
