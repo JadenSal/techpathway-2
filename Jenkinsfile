@@ -4,8 +4,8 @@ pipeline {
   environment {
     AWS_REGION      = 'us-east-2'
     AWS_ACCOUNT_ID  = '208744928440'
-    ECR_FRONTEND    = "208744928440.dkr.ecr.us-east-2.amazonaws.com/techpathway-frontend"
-    ECR_BACKEND     = "208744928440.dkr.ecr.us-east-2.amazonaws.com/techpathway-backend"
+    ECR_FRONTEND = "208744928440.dkr.ecr.us-east-2.amazonaws.com/fullstack-frontend"
+    ECR_BACKEND  = "208744928440.dkr.ecr.us-east-2.amazonaws.com/fullstack-backend"
     ECS_CLUSTER     = 'fullstack-cluster'
     ECS_SVC_FRONT   = 'frontend-service'
     ECS_SVC_BACK    = 'backend-service'
