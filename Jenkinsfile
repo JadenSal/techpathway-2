@@ -6,7 +6,7 @@ pipeline {
     AWS_ACCOUNT_ID  = '208744928440'
     ECR_FRONTEND    = "208744928440.dkr.ecr.us-east-2.amazonaws.com/techpathway-frontend"
     ECR_BACKEND     = "208744928440.dkr.ecr.us-east-2.amazonaws.com/techpathway-backend"
-    ECS_CLUSTER     = 'techpathway-cluster'
+    ECS_CLUSTER     = 'fullstack-cluster'
     ECS_SVC_FRONT   = 'frontend-service'
     ECS_SVC_BACK    = 'backend-service'
   }
