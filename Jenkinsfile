@@ -1,68 +1,88 @@
 pipeline {
-    agent any
+  agent any
 
-    environment {
-        AWS_REGION = 'us-east-2'
-        AWS_ACCOUNT_ID = '208744928440'
-        FRONTEND_REPO = 'fullstack-frontend'
-        BACKEND_REPO = 'fullstack-backend'
-        ECS_CLUSTER = 'fullstack-cluster'
-        FRONTEND_SERVICE = 'frontend-service'
-        BACKEND_SERVICE = 'backend-service'
+  environment {
+    AWS_REGION      = 'us-east-2'
+    AWS_ACCOUNT_ID  = '208744928440'
+    ECR_FRONTEND    = "208744928440.dkr.ecr.us-east-2.amazonaws.com/techpathway-frontend"
+    ECR_BACKEND     = "208744928440.dkr.ecr.us-east-2.amazonaws.com/techpathway-backend"
+    ECS_CLUSTER     = 'techpathway-cluster'
+    ECS_SVC_FRONT   = 'frontend-service'
+    ECS_SVC_BACK    = 'backend-service'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
     }
 
-    stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Build Docker Images') {
-            steps {
-                sh 'docker build -t $FRONTEND_REPO ./frontend'
-                sh 'docker build -t $BACKEND_REPO ./backend'
-            }
-        }
-
-        stage('Login to ECR') {
-            steps {
-                sh '''
-                    aws ecr get-login-password --region $AWS_REGION | \
-                    docker login --username AWS --password-stdin \
-                    $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-                '''
-            }
-        }
-
-        stage('Push Images to ECR') {
-            steps {
-                sh '''
-                    docker tag $FRONTEND_REPO:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$FRONTEND_REPO:latest
-                    docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$FRONTEND_REPO:latest
-
-                    docker tag $BACKEND_REPO:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$BACKEND_REPO:latest
-                    docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$BACKEND_REPO:latest
-                '''
-            }
-        }
-
-        stage('Deploy to ECS') {
-            steps {
-                sh '''
-                    aws ecs update-service --cluster $ECS_CLUSTER --service $FRONTEND_SERVICE --force-new-deployment --region $AWS_REGION
-                    aws ecs update-service --cluster $ECS_CLUSTER --service $BACKEND_SERVICE --force-new-deployment --region $AWS_REGION
-                '''
-            }
-        }
+    stage('ECR Login') {
+      steps {
+        sh '''
+          aws ecr get-login-password --region $AWS_REGION \
+            | docker login --username AWS --password-stdin \
+              $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+        '''
+      }
     }
 
-    post {
-        success {
-            echo 'Pipeline completed successfully!'
+    stage('Build Images') {
+      parallel {
+        stage('Frontend') {
+          steps {
+            sh 'docker build -t $ECR_FRONTEND:$BUILD_NUMBER -t $ECR_FRONTEND:latest ./frontend'
+          }
         }
-        failure {
-            echo 'Pipeline failed!'
+        stage('Backend') {
+          steps {
+            sh 'docker build -t $ECR_BACKEND:$BUILD_NUMBER -t $ECR_BACKEND:latest ./backend'
+          }
         }
+      }
     }
+
+    stage('Push Images') {
+      parallel {
+        stage('Push Frontend') {
+          steps {
+            sh '''
+              docker push $ECR_FRONTEND:$BUILD_NUMBER
+              docker push $ECR_FRONTEND:latest
+            '''
+          }
+        }
+        stage('Push Backend') {
+          steps {
+            sh '''
+              docker push $ECR_BACKEND:$BUILD_NUMBER
+              docker push $ECR_BACKEND:latest
+            '''
+          }
+        }
+      }
+    }
+
+    stage('Deploy to ECS') {
+      steps {
+        sh '''
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SVC_FRONT \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SVC_BACK \
+            --force-new-deployment \
+            --region $AWS_REGION
+        '''
+      }
+    }
+  }
+
+  post {
+    success { echo 'Pipeline complete — both services deployed!' }
+    failure { echo 'Pipeline failed — check logs above.' }
+  }
 }
